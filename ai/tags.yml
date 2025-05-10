@@ -1,0 +1,8 @@
+speech:
+    label: 语音
+    permalink: speech
+    description: 语音唤醒，语音合成，语音端点检测相关
+visual:
+    label: 视觉
+    permalink: visual
+    description: 视觉模型的应用
