@@ -3,17 +3,16 @@ import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
-
 const config: Config = {
   title: 'Jiqi\'s Blog',
-  tagline: 'Dinosaurs are cool',
+  tagline: 'I am a software engineer, instead of frontend engineer.',
   favicon: 'img/github-avatar.jpeg',
 
   // Set the production url of your site here
   url: 'https://github.com',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
-  baseUrl: '/',
+  baseUrl: process.env.BASEURL,
   organizationName: 'jiqili',
   projectName: 'blog',
 
