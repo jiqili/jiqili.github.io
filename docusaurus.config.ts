@@ -9,12 +9,12 @@ const config: Config = {
   favicon: 'img/github-avatar.jpeg',
 
   // Set the production url of your site here
-  url: 'https://github.com',
+  url: 'https://jiqili.github.io',
   // Set the /<baseUrl>/ pathname under which your site is served
   // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: process.env.BASEURL,
   organizationName: 'jiqili',
-  projectName: 'blog',
+  projectName: 'jiqili.github.io',
 
   onBrokenLinks: 'throw',
   onBrokenMarkdownLinks: 'warn',
