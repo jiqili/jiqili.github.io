@@ -5,7 +5,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 const config: Config = {
   title: 'Jiqi\'s Blog',
-  tagline: 'I am a software engineer, instead of frontend engineer.',
+  tagline: 'I am a software engineer who loves to learn and share knowledge.',
   favicon: 'img/github-avatar.jpeg',
 
   // Set the production url of your site here
