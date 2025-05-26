@@ -1,0 +1,17 @@
+---
+title: 基于缩放的自适应屏幕方案
+tags: [CSS]
+---
+适配不同尺寸的电脑屏幕是很常见的问题，解决方案有几种，但实际开发中因为UI需求不一样，所以坑还是有一些的。
+
+解决策略除了把`px`单位全部转成`vh/vw`，还有本文讨论的缩放策略。
+
+<iframe src="https://codesandbox.io/embed/kvdngm?view=preview&hidenavigation=1"
+  style={{width: '100%', height: '500px', border: 0, borderRadius: 4, overflow: 'hidden'}}
+  title="AutoFixScreen"
+  allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking"
+  sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+></iframe>
+
+
+上面这个效果展示中可以全屏看，缩放浏览器可以发现中大于和小于原始比例的情况下都可以正常显示，只是当屏幕宽高比和设计图的不一致时**页面会有留白**。这个是合理的，毕竟页面没有伸缩，所有组件都是原始比例进行缩放的。此外，示例项目中还处理了**缩放后`canvas`画布中坐标转化问题**，这样点击那两个`canvas`元素，就可以`alert`出弹窗。
