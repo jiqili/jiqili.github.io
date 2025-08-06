@@ -1,0 +1,61 @@
+---
+title: Redux VS useReducer+useContext
+tag: [React]
+---
+对React来说，状态管理除了父子组件通过props传递，全局状态管理也很重要。因为兄弟组件的通信要把状态提升到公共的父组件，然后再通过props一层层传给子组件。如果用了TypeScript,那冗余的代码就很多了。本文旨在探讨React官方文档中提到的[使用Reducer和Context拓展你的应用](https://zh-hans.react.dev/learn/scaling-up-with-reducer-and-context)和Redux谁是最佳实践。
+
+# Reducer + Context
+## 什么是Reducer
+只用`useState`来修改状态，那么状态管理是不清晰的，因为缺少一个“中转站”。我们把状态的修改逻辑都放在一个`Reducer`里，这个Reducer里可能有个switch语句来判断不同类型的操作，输入就是旧状态和操作类型，输出是新状态。
+如果组件里想修改全局状态，就`dispatch`一个`action`。
+
+`useState`输入一个初始值，返回状态值和设置状态值的方法。`useReducer`封装了`useState`的逻辑，输入一个初始值和自定义的“中转站”函数，返回状态和设置状态的方法。
+
+`Array.reduce()`的作用是接受上一个结果和当前值来计算下一个结果，从而把一个数组变成一个值，这个是一次性发生的。Reducer则是随着时间推移在应用生命周期内把一组actions转化为单个state。
+
+## Context的意义
+`Context`是上下文的意思，有两个特性。
+
+一个是每个组件都可以拥有自己的context然后传递给所有子组件，那么中间隔着组件也能穿透。
+
+另一个是子组件会接收到多个父组件的context，最终使用距离最近的父组件的context。
+
+阅读源码后发现本质是维护了一个全局变量，然后基于生产者消费者模型实现的。`createContext()`返回的组件是生产者，这个组件有一个`value`属性可以注入全局变量，使用`useContext(context)`返回全局变量的组件是消费者。
+
+## Reducer + Context
+`useReducer`可以搞定状态更新，`createContext`+`useContext`可以传递给所有的子组件，那么两者结合就可以做到全局状态管理，效果等于在父组件使用`useState`声明状态，然后把state和setState函数通过props传给子组件。
+
+缺点之一是如果只有一个Context，那么和该Context有关的任何更新都会导致大量的订阅该Context的组件**重新渲染**。解决办法有两个，一个是维护了很多个Context，但是这样JSX代码里会有很多`Provider`组件，还有一个是使用`useMemo`缓存。
+<iframe src="https://codesandbox.io/embed/mfkptt?view=preview&module=%2Fsrc%2FApp.js&hidenavigation=1&expanddevtools=1"
+  style={{width: '100%', height: '500px', border: 0, borderRadius: 4, overflow: 'hidden'}}
+  title="AutoFixScreen"
+  allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking"
+  sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+></iframe>
+
+[React内置的状态管理能力是最佳选择](https://recoiljs.org/docs/introduction/motivation/)的官方文章提到`useReducer`和`useContext`的组合是最佳状态管理实践。
+
+这篇文章里提到的缺点也就是上文提到的，不过文章进一步指明了你**很难把存全局状态的`Provider`组件和用全局状态的子组件分开**，你需要用`Provider`组件包起来。但是Redux的全局状态管理是可以在任何组件里使用，并且自己处理不必要的重新渲染问题。React只是一个库，提供了基本的东西，Redux可以做到更全面的全局状态维护。
+
+还有一个事情是关于异步请求。有人说Reducer里只能写同步代码，所以`useReducer`+ `useContext`难搞异步请求的需求。这话前半段对后半段错，你可以在`useEffect`或者各种回调函数里等事件完成后`dispatch`来修改状态。
+
+就算你用了Redux,状态的更新依旧是同步的，只是你可以传递异步函数而已。**我们必须分清是不是我们的状态设计有问题**。比如有一个排序和获取数据的需求，如果写法是排序的结果覆盖数组，那等获取数据的请求完成后，排好序的数组又被覆盖了。你用啥都不顶用。正确做法是维护排序条件，然后在获取数据的请求完成后再排序。排序动作只是修改了排序条件。
+
+# Redux
+## Immutable and Pure Function
+* Immutable是不可变的意思，你修改了一个对象内部的值，但是你使用了等于号判断时，依旧是原来的对象。这就有点令人疑惑了，所以我们希望修改一个对象的值后返回一个新对象，这样就是`Immutable`的。
+
+* Pure Function是纯函数的意思，输入相同的参数永远返回相同的结果，并且没有副作用（修改了输入参数内部的值，或者修改了全局变量，或者发送网络请求，或者使用了不确定的随机数等）。纯函数只能调用纯函数，否则就不是纯函数了。
+
+Redux中的Reducer函数就是纯函数，输入是旧状态和action，输出是根据action算出的新状态，没有副作用，不能修改state对象。但是Redux Toolkit提供了`createSlice`函数，这个函数内部使用了`Immer`库基于`Proxy`来跟踪针对state的修改，返回新的state。
+
+## 异步处理与思考
+Redux Toolkit内置了`redux-thunk`中间件来处理异步请求。你可以设置一个Thunk函数当作`store.dispatch`的入参，这个函数接收`dispatch`和`getState`作为参数，这样就可以读和写状态了，
+然后在函数内部进行异步请求，等请求完成后再调用`dispatch`来更新状态。状态的更新本质上还是同步的。这样听起来蛮奇怪的哈哈，但是官方文档中提到目的是为了方便你通过调度或检查当前store状态来使异步逻辑和store交互，也就是说你可以判断状态来做异步操作了。
+把这件事情放在store中做，就可以和UI代码分开，UI代码只关心当前状态是什么。
+
+包括后面的`RTK Query`也都是想把网络请求集中到store中来，和UI代码分开，还帮我们维护了异步的状态。
+
+但是为啥要把网络请求，逻辑代码和UI分开？项目不大时或者组件间关系并不强时，UI代码和逻辑代码放在一起更清晰，也更容易调试吧！使用RTK Query只会要求更多的Redux知识。别忘了我们使用Redux的初衷——在减少重复渲染的基础上，解决兄弟组件和多层组件通信问题。这和异步请求无关吧！
+
+总的来说，我认为关于Redux我们只需要`createSlice`得到reducer和actions,`configureStore`接收多个reducer。用的时候就用`useSelector`获取状态分支，`useDispatch`获取`dispatch`函数。dispatch一个action来修改状态。关于异步操作，比如网络请求，之前怎么写就怎么写，比如建一个名为apis的文件夹，然后里面都是原生的函数方法。
