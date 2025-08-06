@@ -8,4 +8,4 @@ tags: [Packaging]
 
 issues里有人提到里这个[bug](https://github.com/vitejs/vite/issues/11012), 官方在22年回复说如果相对路径引入，那么`rebaseUrls`函数不会被调用。这个issue被close了，拉到最底下发现提交了pr修复了，这个pr是上个月提交的。这时候我猜测我需要更新vite版本了，然后我看了我之前看的官方文档是7版本的。
 
-升级版本后这个问题解决。值得一提的是，本次遇到的bug中生产环境没有复现，所以vite和webpack这类打包工具都有一个问题就是开发环境和生产环境不一致的问题，webpack历史悠久，坑相对少一些。
+升级版本后这个问题解决。
