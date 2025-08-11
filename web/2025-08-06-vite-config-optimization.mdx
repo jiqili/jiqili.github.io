@@ -1,0 +1,52 @@
+---
+title: Vite笔记
+tags: [Vite]
+---
+# 前言
+今天我看了npm上webpack和vite的周下载量，前者26477010,后者27654511。github上前者star数为65.5k,后者为74.6k。看来vite的受欢迎程度已经超过webpack了。
+
+# 背景
+Vite在开发阶段是很快的，因为它是基于浏览器原生的ES模块来提供源码模块的，浏览器会自动处理模块依赖关系，所以不需要打包。热更新时，也不必像webpack那样需要整个重新构建并重载页面，而是只更新修改的模块。
+对于依赖模块，Vite会用esbuild预构建node_modules里的文件，这样浏览器就可以直接加载这些模块了。esbuild是用Go语言写的，速度很快。
+并且Vite还用HTTP头来加速整个页面的重新加载，源码模块会根据`304 Not Modified`来判断是否需要重新加载, 依赖模块会通过`Cache-Control`头来强缓存，毕竟node_modules里的文件一般不会变。
+
+Vite在生产阶段会把代码打包成一个文件，这个过程是通过插件支持更好的Rollup来实现的。官方文档说ES模块文件太多，哪怕用http2,网速也很慢，所以还是需要树摇，懒加载和chunk分割。总之Vite在打包和开发阶段用的打包工具不同，所以会带来开发和构建之间的不一致。
+
+# Vite解析
+原生ES导入不支持`import { someMethod } from 'my-dep'`这种裸模块导入方式，虽然这个语句是ESM格式。
+
+Vite使用esbuild把`const someMethod = require('my-dep')`这种的CommonJS格式转成ESM格式，并且url也会改为`/node_modules/.vite/deps/my-dep.js?v=1234567890`这种合法的url。
+
+Vite使用esbuild把TS转成JS,但是不做类型检查，因为担心慢且不必要。
+
+# Vite优化功能
+- 可以把css文件中的部分样式导出： `import someStyle from './style.css'`，这样可以减少css文件的大小。
+- 可以把json中的根字段导出： `import { someField } from './data.json'`，这样可以减少json文件的大小。
+
+# Vite与CSP
+我们可以通过在http头中或者html的meta标签中指定`Content-Security-Policy`的`nonce`值来防止XSS攻击。这样一来，只有合法的脚本才能执行。
+<iframe src="https://codesandbox.io/embed/t52tj6?view=editor+%2B+preview&module=%2Findex.html&hidenavigation=1"
+style={{width: '100%', height: '500px', border: 0, borderRadius: 4, overflow: 'hidden'}}
+title="AutoFixScreen"
+allow="accelerometer; ambient-light-sensor; camera; encrypted-media; geolocation; gyroscope; hid; microphone; midi; payment; usb; vr; xr-spatial-tracking"
+sandbox="allow-forms allow-modals allow-popups allow-presentation allow-same-origin allow-scripts"
+></iframe>
+值得一提的是，模拟http头的`http-equiv`属性还能指定`refresh`，`Content-Type`还有`Set-Cookie`等http头的值。
+
+用法应该是指定占位的`http.cspNonce`值，然后客户端请求html文件时随机生成一个nonce值来替换这个占位的值。
+
+还有一种方式是计算脚本或者样式标签里的内容成hash值，然后在CSP中指定这个hash值，这样就可以允许这些脚本或样式执行了。如果是外部脚本，可以指定`integrity`hash值。
+```
+Content-Security-Policy: script-src 'sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC' 'sha256-fictional_value'
+
+<script
+  src="https://example.com/example-framework.js"
+  integrity="sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQho1wx4JwY8wC"
+  crossorigin="anonymous"></script>
+
+```
+`script-src`的值还可以是一个url, Vite又会为小资源内联为`data:`格式的字符串，Vite提示不要把这种url作为`script-src`的值，因为这样会导致CSP失效。
+
+# Vite代码分割
+Vite会预解析css模块间的依赖关系，这样就可以同时加载这些模块了。
+
