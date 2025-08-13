@@ -1,0 +1,10 @@
+---
+title: Electron数据存哪里
+tags: [Electron]
+---
+使用AI生成了代码测试了两种方案下的8000条数据的查询时间，一个是存在前端里的indexdb里，一个是存在后端的sqlite3里然后通过ipc查询。
+
+结果是ipc+better-sqlite3快多了，用时0.1-0.3毫秒，而indexdb用时48毫秒，最快也有2-6毫秒。查询都是基于id查询的，都有索引。
+
+![electron-indexdb-performance](./assets/electron-indexdb-performance.png)
+![electron-sqlite-performance](./assets/electron-sqlite-performance.png)
