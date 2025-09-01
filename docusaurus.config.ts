@@ -33,6 +33,8 @@ const config: Config = {
         id: 'web',
         path: './web', 
         routeBasePath: 'web',
+        blogSidebarTitle: 'All posts',
+        blogSidebarCount: 'ALL',
       },
     ],
     [
@@ -41,6 +43,8 @@ const config: Config = {
         id: 'ai',
         path: './ai',
         routeBasePath: 'ai',
+        blogSidebarTitle: 'All posts',
+        blogSidebarCount: 'ALL',
       },
     ],
   ],
@@ -50,6 +54,7 @@ const config: Config = {
       {
         docs: false,
         blog: {
+
           showReadingTime: true,
           feedOptions: {
             type: ['rss', 'atom'],
