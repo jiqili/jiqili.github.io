@@ -22,3 +22,7 @@ Electron:
     label: Electron
     permalink: electron
     description: Electron
+Extension:
+    label: Extension
+    permalink: extension
+    description: Chrome Extension
