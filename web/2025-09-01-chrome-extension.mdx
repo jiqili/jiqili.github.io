@@ -15,7 +15,9 @@ tags: [Extension]
 我这个小项目用到了`["activeTab", "tabs", "notifications", "webRequest", "webNavigation", "nativeMessaging"]`
 除了通知，还有监控网络请求，监听路由变化和标签页变化。我还尝试了和本地应用通信的`nativeMessaging`，不过后来换成了本地应用起一个HTTP服务器来通信，下文会详细说这个`nativeMessaging`。
 
-另外还可以配置插件针对哪些url生效，可以用通配符。
+另外还可以配置插件针对哪些url生效，可以用通配符。还可以定义内容脚本的执行时机，比如`document_start`，`document_end`，`document_idle`。 但是对于React和Vue等SPA应用来说，
+document内容加载完成，也就是DOMContentLoaded事件是针对初始页面的，SPA应用往往要请求后端数据后填充到html里，所以这个事件触发时，页面内容可能还没有加载完成。
+解决办法就是从产品设计上来规避这个问题，比如用户点击扩展图标后再执行脚本，这时候我相信用户一定是在内容加载完成了才点击按钮。
 
 Manifest V3里的background脚本需要用service worker来实现，不能再用之前的持久化脚本了，大模型告诉我V2版本可以让background脚本一直运行。
 而service worker会被浏览器按需启动和关闭，那websocket估计就比较难搞了。
