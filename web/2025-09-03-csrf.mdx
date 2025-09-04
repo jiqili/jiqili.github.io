@@ -1,0 +1,23 @@
+---
+title: CSRF和XSS攻击原理与防范
+tags: [Security]
+---
+# 前言
+CSRF跨域请求伪造，根本原因是**浏览器会根据请求的域名自动携带对应的cookie**，所以只要客户端上执行了form请求，就会携带cookie。form请求不存在跨域问题，所以隐藏form表单或者自动提交表单是常用的手段。form表单不受CORS限制是为了向后兼容，表单提交在CORS概念出现之前就存在。
+
+img标签和script标签也是同样道理，不受跨域限制。
+
+值得一提的是，cookie的expire和max-age没指定的话，那默认是session,那么当浏览器关闭后或者一段时间不活跃后，这个cookie会被自动清除。浏览器对于跨域的seesion cookie是否有效的判断机制应该不是很简单的。做了几个实验还是没摸清楚规律。
+
+# 解决办法
+- 专门搞一个csrf token登录后服务端返回给客户端，客户端存起来后每次请求带上token,服务端可以搞个中间件来判断token是否合法。注意token不要存在cookie里，不然csrf攻击页面又自动带上cookie了。
+- 指定`SameSite`为`strict`或者`Referer`里判断哪个路由发出的请求，或者`Origin`判断哪个域名发出的请求。有时候`Origin`和`Referer`字段可能没有，比如地址栏里直接输入地址访问。
+
+# 思考
+那为什么要用会带来CSRF风险的cookie存登录凭证呢？localStorage能否替代cookie？
+
+技术上是可以的，但是容易带来XSS攻击风险，因为localStorage是js能直接访问的，而cookie可以设置`HttpOnly`防止非法脚本读取。
+只要你的网站有XSS漏洞，那token就会被从localStorage里偷走，然后就能伪造请求了。诚然现在React等框架能把带脚本的dom内容进行转义来防止大部分XSS攻击，或者你可以使用CSP执行可信源的脚本，
+但如果引入的第三方脚本或者浏览器插件读localStorage里的token呢？
+
+所以最好还是把token放cookie里，然后设置`SameSite`和`HttpOnly`，这样就能防止CSRF和XSS攻击了。用https的话， 还可以设置`Secure`，防止中间人攻击窃取cookie。

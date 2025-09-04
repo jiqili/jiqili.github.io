@@ -26,3 +26,7 @@ Extension:
     label: Extension
     permalink: extension
     description: Chrome Extension
+Security:
+    label: Security
+    permalink: security
+    description: Security
