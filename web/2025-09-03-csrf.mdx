@@ -10,11 +10,15 @@ img标签和script标签也是同样道理，不受跨域限制。
 值得一提的是，cookie的expire和max-age没指定的话，那默认是session,那么当浏览器关闭后或者一段时间不活跃后，这个cookie会被自动清除。浏览器对于跨域的seesion cookie是否有效的判断机制应该不是很简单的。做了几个实验还是没摸清楚规律。
 
 # 解决办法
-- 专门搞一个csrf token登录后服务端返回给客户端，客户端存起来后每次请求带上token,服务端可以搞个中间件来判断token是否合法。注意token不要存在cookie里，不然csrf攻击页面又自动带上cookie了。
+- 专门搞一个csrf token登录后服务端返回给客户端，客户端存起来后每次请求时把csrf token作为参数传过去,服务端可以搞个中间件来判断token是否合法。注意token不要存在cookie里，不然csrf攻击页面又自动带上cookie了。不过这样有些麻烦，尤其是对于第三方请求。
 - 指定`SameSite`为`strict`或者`Referer`里判断哪个路由发出的请求，或者`Origin`判断哪个域名发出的请求。有时候`Origin`和`Referer`字段可能没有，比如地址栏里直接输入地址访问。
 
 # 思考
-那为什么要用会带来CSRF风险的cookie存登录凭证呢？localStorage能否替代cookie？
+1. 为什么浏览器要自动携带cookie？
+
+因为cookie是为了解决http无状态的缺点，否则用户每次请求都要跳到登陆页面来进行合法判定。有了自动带上cookie后，就可以创造一种连贯的，有状态的用户体验。
+
+2. 那为什么要用会带来CSRF风险的cookie存登录凭证呢？localStorage能否替代cookie？
 
 技术上是可以的，但是容易带来XSS攻击风险，因为localStorage是js能直接访问的，而cookie可以设置`HttpOnly`防止非法脚本读取。
 只要你的网站有XSS漏洞，那token就会被从localStorage里偷走，然后就能伪造请求了。诚然现在React等框架能把带脚本的dom内容进行转义来防止大部分XSS攻击，或者你可以使用CSP执行可信源的脚本，
