@@ -30,3 +30,7 @@ Security:
     label: Security
     permalink: security
     description: Security
+WebGL:
+    label: WebGL
+    permalink: webgl
+    description: WebGL
