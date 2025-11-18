@@ -1,0 +1,156 @@
+---
+title: ThreeJS基础与优化
+tags: [WebGL]
+---
+
+import ThreeCubeDemo from '../src/components/ThreeJS/CubeDemo.tsx';
+import ViewportDemo from '../src/components/ThreeJS/ViewportDemo.tsx';
+import MergeGeometryDemo from '../src/components/ThreeJS/MergeGeometryDemo.tsx';
+import InstancedMeshDemo from '../src/components/ThreeJS/InstancedMeshDemo.tsx';
+import ReduceFragmentDemo from '../src/components/ThreeJS/ReduceFragmentDemo.tsx';
+import OffscreenDemo from '../src/components/ThreeJS/OffscreenDemo.tsx';
+
+
+## 基础
+本文探讨ThreeJS在WebGL基础上除了做了封装，还做了哪些优化。
+### 基础概念
+ThreeJS有渲染器，传入场景和摄像机到渲染器，就可以把摄像机视椎体中的三维场景渲染成一个二维图片显示在canvas中。
+
+场景里有灯，摄像机，Mesh，Object3D,Group. 一个Object3D可以包括多个Mesh. Group包括多个Mesh和Object3D.
+Mesh是由Geometry和Material组成的。Material里包括纹理Texture, 纹理是一个图片，Materia还规定了光照如何作用在Geometry上。
+摄像机可以加入场景中的物体中，这样摄像机也会继承其父对象的位置和朝向，但是摄像机不一定要在场景中，
+渲染器渲染时需要场景和摄像机这两个参数，这个摄像机可以是不加入场景中的摄像机。
+### 响应式设计
+`renderer.setSize` 的第三个参数 `updateStyle` 默认是 `true`，表示同时更新canvas的CSS大小以匹配分辨率大小。如果你想保持canvas的CSS大小不变，可以把这个参数设为 `false`。
+
+纹理要么是从文件中加载，要么在画布上生成，要么由另一个场景渲染出来的图像。
+## 封装
+### Segment of Cube
+`BoxGeometry`提供了分段参数，下面这个例子演示了分段数对立方体膨胀曲度和光照效果的影响。
+
+<ThreeCubeDemo ></ThreeCubeDemo >
+### 材质
+- MeshBasicMaterial: 不受光照影响，颜色和纹理不变。
+- MeshPhongMaterial: 在每个像素计算光照，支持镜面高光的光泽度`shininess`。
+- MeshStandardMaterial: 物理基础渲染(PBR)材质，更真实地模拟光照和材质交互，支持金属度`metalness`和粗糙度`roughness`。
+- MeshPhysicalMaterial: 比`MeshStandardMaterial`多一个描述反光亮度的属性，清漆层`clearcoat`以及光泽层的粗糙程度`clearcoatRoughness`。
+
+粗糙度越高，表面越漫反射，光泽度越低，比如棒球。而不粗糙的东西，比如台球就很有光泽。
+
+金属度越高，感觉反射的光越集中，非金属物体的反射光比较分散。
+
+`clearcoat`是理想的无色超薄透明层，只会增加一份额外的高光反射，不改变底层的颜色和金属度，只会夺走一部分光能量，所以底层会变得略暗。
+### 纹理 
+如果想要在一个几何体上使用多个纹理，使用纹理图集把多个图像放在单一纹理中，然后使用UV映射来选择纹理图集中的不同区域。
+UV映射是把三维几何体的每个顶点/片元映射到二维纹理坐标，渲染时用该坐标在纹理采样得到颜色。
+
+纹理往往是内存使用最多的资源，一般来说，纹理会占用宽*高*4*1.33字节的内存空间，4是RGBA四个通道，1.33是mipmap的额外开销。有很多图片是经过压缩后的，所以看起来文件不大，但其实加载到内存后会变得很大。
+
+Mipmap 是同一纹理按 1/2 尺寸逐级缩小的一组金字塔级别 (level 0 是原图, level 1 宽高各减半, 直到 1x1)。采样时针对“远处或缩小”像素使用更接近所需分辨率的级别.
+
+在WebGL中，JPG使用的内存并不比PNG少。JPG是有损压缩，不支持透明度，解码后是RGB格式，但对于RGB占用的内存和PNG是一样的。
+
+当纹理绘制的尺寸大于原始尺寸时，会出现锯齿（最近点采样，所以颜色变化地很突兀）和模糊（线性插值采样）现象，称为上采样(Up-sampling)。
+当纹理绘制的尺寸小于原始尺寸时，会出现闪烁（更准确来说是采样结果不确定导致移动的时候会闪烁）现象，称为下采样(Down-sampling)。为了解决这些问题，可以使用不同的过滤器(Filter)来控制纹理采样的方式。
+
+纹理有两个属性`wrapS`和`wrapT`用来设置纹理重复方式的，如果不重复就是最后一个像素无限重复。
+
+### 光照
+- 环境光(AmbientLight)
+- 半球光(HemisphereLight)
+- 方向光(DirectionalLight)
+- 点光源(PointLight)
+- 聚光灯(SpotLight)
+- 矩形区域光(RectAreaLight)
+### 摄像机
+任何时候摄像机的设置变动，都要调用摄像机的`updateProjectionMatrix()`方法来更新投影矩阵.
+
+投影输出区域：摄像机投影和裁剪后的规范化设备坐标(NDC: x,y,z ∈ [-1,1])对应的三维坐标映射到实际画布上的像素区域. 
+`renderer.setViewport(x, y, width, height)`设置在画布上的输出画框，投影计算出的图像被缩放放进这个画框中显示。
+
+下面这个例子，可以把立方体宽高拉到最大，这样立方体会占据整个视口，所以视口区域都是红色，又因为视口宽度和高度不一样，所以红色的视口区域是一个长方形。注意，WebGL跟随OpenGL都定义左下是原点。
+
+<ViewportDemo ></ViewportDemo >
+
+`renderer.setScissor`设置可写入帧缓冲的矩形区域，需要提前开启裁剪测试。裁剪测试开启后，每个片元的`gl_FragCoord(x,y)`如果不在设定的矩形内，直接被舍弃，不写入颜色缓冲区，深度缓冲区等。
+
+为什么不把near设置地近似于0, far设置地很大，让一切尽收眼底呢？
+原因是深度缓冲区的精度是有限的。透视投影时，为了让近处的物体“差一点距离”就显得变化很大（透视感），所以近处被分配了更高精度的分辨率，远处的物体的深度被压缩在很小的范围内，就会导致深度冲突。
+解决办法是进行精度的log缩放，但是这会带来额外的计算开销。
+
+正交摄像头指定了一个长方体，使得视野是平行的，没有透视效果。适合2D场景，三视图或者UI界面。
+### 阴影
+ThreeJS默认使用阴影贴图来实现阴影效果。如果有20个物体和5个光源，那么第一个灯光为所有物体投影阴影，然后绘制场景，
+然后第二个灯光绘制场景，依次类推。这样会导致大量的重复绘制，影响性能。
+
+解决方案是使用假投影或者使用光照贴图或者环境光贴图预先计算离线照明的效果。
+
+阴影效果需要渲染器开启阴影属性，需要光能投射阴影，物体能接收和投射阴影。
+
+阴影是通过光线的角度渲染场景生成的，就好像是一个照相机。直射平行光就好像正交相机，聚光灯好像透视相机。如果让阴影摄像机看到的面积过大，但是阴影贴图的分辨率是固定的，所以就会有像素化的阴影。
+
+点光源的阴影需要立方体贴图在六个方向各渲染一次场景，所以要绘制6次，性能会差点。
+### 雾化
+场景需要开启fog属性，然后材质也能设置`fog`属性来决定是否受雾化影响。
+### 自定义缓冲几何体
+使用`BufferGeometry`创建自定义缓冲几何体需要`BufferAttribute`创建`position`， `normal`，`uv`等特定的属性名。
+
+Float32Array底层实现是连续内存，可以高效复制到GPU,而Array不是。
+
+## 优化
+### 按需渲染
+很多时候我们要用 `requestAnimationFrame` 来循环渲染，但是我们可以借助 `OrbitControls` 的 `change` 事件来实现按需渲染。只有在用户交互时才渲染，这样可以节省大量的计算资源。
+然后开启惯性 `controls.enableDamping = true` 避免画面僵硬。游戏场景或者艺术创作场景中需要场景一直动，这种方式不适用。但是对于地图浏览器，3D渲染器等应用，这种方式非常有效。
+
+### 合并几何体
+当几何体的顶点属性布局都相同时，可以把多个几何体合并成一个几何体，减少Draw Call的次数，提高渲染性能。但是合并后只能整体变换了，不能局部独立变换或者控制显示属性等。
+
+例如画bounding boxes时如果不要求可以独立控制单个box,我们就可以把所有box合并成一个几何体，然后只用一个Mesh来渲染。
+
+<MergeGeometryDemo />
+这个例子展示了直接把十万个立方体数据写进一个Mesh,用`mergeBufferGeometries`合并成一个几何体,以及不合并几何体的性能差异。
+
+值得一提的是，`mergeBufferGeometries`合并后的内存占用原本是比另一种直接写入Mesh的合并方法的内存占用更多的。
+原因是虽然dispose了geometry数据，但是没有清除geometry在Javascriptd堆内存，dispose只是清除了GPU上的内存，代码如下：
+```
+const mergedGeometry = BufferGeometryUtils.mergeGeometries(geometries, false);
+geometries.forEach((geometry) => geometry.dispose());
+geometries.length = 0;
+```
+### 禁用自动矩阵更新
+这个对性能提升根本没用,mesh自身的矩阵变换消耗性能估计就是1%这种级别的.我试过一万个独立mesh,8深度的嵌套mesh都没有提高性能. 
+
+所以`matrixAutoUpdate`默认是true是有道理的.
+
+### 减少片元填充
+用`EdgesGeometry`+`LineSegments`只显示边，会减少大量片元填充。
+
+<ReduceFragmentDemo />
+
+把摄像机拉到可以看到所有立方体,否则视锥剔除优化会影响对比效果.
+
+### 视锥剔除
+本文所有demo都可以看到如果把摄像机拉远看到场景全貌,那FPS一定会降低.ThreeJS默认开启视锥剔除.
+
+### GPU实例化渲染
+传统方式是每个立方体都是独立的Mesh,每个立方体都要draw call一次,而InstancedMesh是所有立方体共享一个几何体和材质,只需要一次draw call. GPU会自动复制几何体并应用不同变换矩阵,包括伸缩.
+
+<InstancedMeshDemo />
+
+### 在WebWorker里使用离屏渲染
+canvas有一个方法`transferControlToOffscreen()`，返回一个offscreen对象传给worker,这个对象在worker里相当于canvas对象了,worker里的脚本基于这个canvas对象可以创建渲染器.
+然后在worker脚本里创建camera,场景,几何体等. worker不能访问DOM,所以DOM中的resize事件都需要通过worker的`postMessage`方法传递给worker. 
+`postMessage`方法的第二个参数可以传递`OffscreenCanvas`对象的所有权给worker,这样主线程就不再拥有这个对象了, 目的是减少内存拷贝开销. 因为`postMessage`的第一个参数是深度拷贝的,第二个参数是第一个参数的子集,这样主页面就不能访问第二个参数了.
+
+<OffscreenDemo />
+
+从这个demo里可以发现,**离屏渲染并不会很大提升FPS,但是如果主线程繁忙的时候FPS也不会受影响,离屏渲染的优势就体现出来了**
+
+这个demo的离屏渲染用postMessage实现的camera的控制,还用线性插值实现阻尼效果. 但是鼠标事件是由canvas监听的,如果鼠标在canvas外发出的事件就会丢失掉了.这是个bug,需要在父组件中捕获鼠标事件处理一下.但是我这里博客网站不太好搞.
+
+也可以看到,离屏渲染的操作会比主线程渲染的延时大很多,我这里统计平均时延,因为离屏渲染鼠标点击事件可能发生在帧渲染的任何阶段,这个是不确定的,时延波动挺大的.
+AI说ThreeJS的控制器通常把鼠标事件响应放在帧渲染末尾进行,所以时延还算稳定.
+**离屏渲染涉及到异步消息传递机制,线程调度等等,所以会慢很多,没有在主线程渲染中那样在同一个上下文里那么快**
+
+
+

@@ -1,0 +1,227 @@
+.wrapper {
+  padding: 20px;
+  background: #ffffff;
+  color: #333;
+  min-height: auto;
+}
+
+.title {
+  text-align: center;
+  margin-bottom: 30px;
+  color: #333;
+}
+
+.canvasContainer {
+  max-width: 900px;
+  margin: 0 auto;
+  position: relative;
+  margin-bottom: 20px;
+}
+
+.canvas {
+  width: 100%;
+  height: 500px;
+  border: 3px solid #4CAF50;
+  display: block;
+  border-radius: 8px;
+  cursor: grab;
+}
+
+.canvas:active {
+  cursor: grabbing;
+}
+
+.modeOffscreen .canvas {
+  border-color: #4CAF50;
+}
+
+.modeMain .canvas {
+  border-color: #f44336;
+}
+
+.modeNone .canvas {
+  border-color: #999;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  padding: 15px;
+  background: #f5f5f5;
+  font-weight: bold;
+  font-size: 18px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  color: #333;
+  flex-wrap: wrap;
+}
+
+.labelButtons {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.stats {
+  position: absolute;
+  top: 95px;
+  left: 20px;
+  background: rgba(0, 0, 0, 0.95);
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.8;
+  min-width: 200px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  color: #fff;
+}
+
+.stats h4 {
+  margin: 0 0 10px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #444;
+}
+
+.statRow {
+  display: flex;
+  justify-content: space-between;
+}
+
+.statLabel {
+  color: #aaa;
+}
+
+.statGood {
+  color: #4CAF50;
+}
+
+.statWarning {
+  color: #FFC107;
+}
+
+.statBad {
+  color: #f44336;
+}
+
+.controls {
+  text-align: center;
+  padding: 25px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  margin: 20px auto 0;
+  max-width: 900px;
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.controlGroup {
+  margin: 20px 0;
+  padding: 15px;
+  background: #e8e8e8;
+  border-radius: 5px;
+  display: flex;
+  gap: 15px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.controls button {
+  padding: 12px 24px;
+  margin: 0;
+  cursor: pointer;
+  background: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 15px;
+  font-weight: bold;
+  transition: all 0.3s;
+}
+
+.controls button:hover {
+  background: #45a049;
+  transform: translateY(-2px);
+}
+
+.dangerBtn {
+  padding: 10px 20px;
+  font-size: 14px;
+  background: #f44336;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+  margin: 0;
+}
+
+.dangerBtn:hover {
+  background: #da190b;
+  transform: translateY(-2px);
+}
+
+.toggleBtn {
+  padding: 10px 20px;
+  font-size: 14px;
+  background: linear-gradient(135deg, #4CAF50, #45a049);
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s;
+  margin: 0;
+}
+
+.toggleBtn:hover {
+  background: linear-gradient(135deg, #45a049, #3d8b40);
+  transform: translateY(-2px);
+}
+
+.controls input[type="range"] {
+  width: 300px;
+  margin: 0;
+}
+
+.interactionHint {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  padding: 10px 20px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: #aaa;
+}
+
+.modeIndicator {
+  display: inline-block;
+  padding: 5px 15px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: bold;
+  margin-left: 10px;
+}
+
+.modeOffscreen .modeIndicator {
+  background: #4CAF50;
+  color: white;
+}
+
+.modeMain .modeIndicator {
+  background: #f44336;
+  color: white;
+}
+
+.modeNone .modeIndicator {
+  background: #999;
+  color: white;
+}
