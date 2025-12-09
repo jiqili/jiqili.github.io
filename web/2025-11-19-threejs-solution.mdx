@@ -1,0 +1,135 @@
+---
+title: ThreeJS的一些解决方案
+tag: [WebGL]
+---
+import ShaderDemo from '../src/components/ThreeJS/ShaderDemo.tsx';
+
+## 天空盒原理
+制作一个立方体,应用纹理绘制在内部面,摄像机放在立方体中心,通过控制摄像机旋转来实现观察天空盒的效果。
+
+封装的有立方体贴图加载器, 也有针对360全景相机拍的等距矩形贴图进行mapping的加载配置.
+
+## 透明度测试
+开启透明度测试可以省去透明度混合的开销,一些透明度低的纹理像素直接不被渲染,这样就可以看到其后的纹理像素了. 适用于边缘透明的纹理,如树叶等.
+
+## 多个画布,多个场景
+浏览器限制webgl上下文最多8个,超出则舍弃最初创建的webgl 上下文.
+
+不同webgl上无法共享资源, 这意味着同一个模型要被加载多次.
+
+解决办法是在一个canvas中加载一个渲染器,这个canvas充满全屏,然后视口裁剪到不同区域,每个区域渲染不同场景.
+这样以来,渲染器所需要的webgl上下文只有一个,但是有多个彼此独立的场景了.
+
+## 选择
+### 射线追踪(raycasting)
+从鼠标处发射射线通过计算得到与视锥体中哪些对象相交. 
+鼠标的屏幕坐标+摄像机投影矩阵+视图矩阵可以得到世界坐标,然后视椎体的近端平面沿着摄像机方向射向远端平面.然后对于场景中的所有三角形检查是否与该射线相交.
+对于三角形很少的情况,这种方法可行.元素多的话可以先判断包围盒是否相交,如果包围盒不相交就不用检查组成元素的三角形了.
+
+这个方法除了CPU性能问题还有一个问题是射线不容易穿透透明物体.解决方法就是基于GPU的解决方案.
+
+### 基于GPU的颜色id识别
+对每个对象使用唯一的颜色离屏渲染,然后检查鼠标位置的颜色值.
+在ThreeJS中需要另外创建一个场景,把主场景中的每个物体都在这个场景中创建一个对应物体,材质使用MeshBasicMaterial,颜色使用唯一颜色. 
+颜色组合有256*256*256种可能,可以支持1677万个物体的选择.
+
+`WebGLRenderTarget`这个类可以创建一个离屏渲染目标,返回的是一个纹理.使用方法是`renderer.setRenderTarget(renderTarget)`,然后调用`renderer.render(scene, camera)`,渲染结果就会被渲染到renderTarget中,而不是屏幕上.
+记得用完恢复`renderer.setRenderTarget(null)`渲染到屏幕上.
+
+流程是渲染器基于可视范围为1个像素的摄像机渲染离屏场景,得到了纹理,然后得到了颜色值,再把颜色值转换成id,最后根据id找到对应物体.
+
+## 滤镜后期处理
+略
+
+## 使用开源着色器
+### 渐变色
+看下文的代码,fragCoord是片元坐标,iResolution是渲染分辨率,iTime是时间变量.
+第一行代码得到的uv是二维的纹理坐标,范围是0-1. cos的值是-1到1, col1, col2和col3的值被转成了0-1.
+
+
+对于col1, `uv.xyx`得到了三维向量,这表明最终颜色的r和b值和x坐标有关,g和y有关. 
+
+片元坐标系中,左下角是原点,左下角的颜色是(1,1,1)为白色, 左上角的x等于0所以颜色是(1, 0.5+0.5*cos(y), 1), y从0到1,g的值是单减的,g的区间为1到0.7左右所以颜色从白变成淡紫色, 紫色是红加绿(1,0,1),青色是绿加蓝(0,1,1), 黄色是红加绿(1,1,0).
+
+从左下角到右下角是(0.5+0.5*cos(x), 1, 0.5+0.5*cos(x)), x从0到1,r和b都是单减的,从1到0.7左右, 所以颜色从白变成青绿色(0.7,1,0.7).
+
+从左下角到右上角是(0.5+0.5*cos(x), 0.5+0.5*cos(y), 0.5+0.5*cos(x)), x和y都是单减的,所以颜色从白变成中灰色(0.7,0.7,0.7).三通道相等就是灰色.
+
+`uv.xyx`这种配色会以斜率为1的对角线为分界线.
+
+对于col2,加上时间因子,颜色会呈现周期性变化,但仍然有淡对角线为分界线的特征.
+
+对于col3,加上时间因子和xyz不相等的偏移量,颜色变化更加复杂,不再有明显的对角线分界特征.
+
+对于col4,把uv乘以40,颜色变化更加剧烈,形成了彩色条纹的效果.
+```
+vec2 uv = fragCoord/iResolution.xy;
+vec3 col1 = 0.5 + 0.5*cos(uv.xyx);
+vec3 col2 = 0.5 + 0.5*cos(iTime+uv.xyx);
+vec3 col3 = 0.5 + 0.5*cos(iTime+uv.xyx+vec3(0,2,4));
+vec3 col3 = 0.5 + 0.5*cos(iTime+uv.xyx*40.0+vec3(0,2,4));
+```
+### 分区&&区域内控制颜色
+下面的代码把纹理切分成8x8个小区域,每个区域采样一个噪声纹理,然后根据噪声值和时间计算亮度p,最后用亮度p控制颜色的明暗.
+```
+#include <common>
+uniform vec3 iResolution;
+uniform float iTime;
+#define TIMESCALE 0.25
+#define TILES 8
+#define COLOR 0.7, 1.6, 2.8
+// 伪随机生成器
+float pseudoRandom(vec2 gridPos) {
+    float h = dot(gridPos, vec2(127.1, 311.7));
+    return fract(sin(h) * 43758.5453);
+}
+void mainImage(out vec4 fragColor, in vec2 fragCoord) {
+    vec2 uv = fragCoord.xy / iResolution.xy;
+    uv.x *= iResolution.x / iResolution.y;
+    // 计算方块索引
+    vec2 gridIndex = floor(uv * float(TILES));
+    // 用哈希替代纹理采样
+    float randomValue = pseudoRandom(gridIndex);
+    // 下落动画
+    float p = 1.0 - mod(randomValue + iTime * float(TIMESCALE), 1.0);
+    p = min(max(p * 3.0 - 1.8, 0.1), 2.0);
+    // 圆形渐变
+    vec2 r = mod(uv * float(TILES), 1.0);
+    r = vec2(pow(r.x - 0.5, 2.0), pow(r.y - 0.5, 2.0));
+    p *= 1.0 - pow(min(1.0, 12.0 * dot(r, r)), 2.0);
+    fragColor = vec4(COLOR, 1.0) * p;
+}
+void main() {
+    mainImage(gl_FragColor, gl_FragCoord.xy);
+}
+```
+<ShaderDemo />
+
+## 对齐html元素到3D对象
+html元素使用绝对定位,然后先对每个物体使用`getWorldPosition`方法获得世界坐标,然后世界坐标有一个参数为camera的`project`方法获得标准屏幕坐标(NDC). 
+这个NDC的范围是从-1到1,使用`0.5*(NDC+1)`缩放到0到1,再乘上client宽高就得到css坐标,然后设置transform样式的translate值. 
+
+进一步优化的话,为了避免html元素重叠,可以使用`RayCaster`获取最前面的元素,后面被遮挡的元素就不显示了. 
+`RayCaster`要先用`setFromCamera`设置起终点,然后`RayCaster`有`intersectObjects(mesh[])`方法获得与射线相交的物体.
+
+
+前后顺序优化: NDC坐标的z值在-1到1才可以被看到,-1是视椎体的near,1是视椎体的far,所以不在视椎体内也隐藏掉html元素. 这个z值还可以作为html元素的zIndex值,这样元素按照正确的顺序排列.
+
+但一个物体的原点不能代表整个物体, 如果要更好地检查物体是否在视椎体内,还需要使用基于GPU的方案.
+
+前后顺序优化: 如果一个物体上有很多个html元素,一些元素在这个物体的背面,可以根据元素附着的点和物体中心点的向量与摄像机方向向量的点积来判断元素是否在物体的正面,如果点积小于0则在背面或者小于设定的阈值,隐藏掉这个元素.
+
+## 纹理索引的使用(拾取和着色)
+主要流程是首先准备一个包含颜色和id之间映射信息的纹理图片,然后设置摄像机的可视范围为1px*1px,并把渲染目标定为一个纹理对象,这样就得到了颜色值,然后根据颜色值得到索引id,再根据id找到对应物体.
+
+而着色更复杂一些,需要修改材质的着色器代码,材质本质是着色器代码的高级封装.有一个`onBeforeCompile`钩子函数暴露了shader对象,从而可以使用`shader.fragmentShader = shader.fragmentShader.replace(...)`来修改片元着色器代码,从而实现自定义的着色效果.
+并且`vUv`是ThreeJS的纹理坐标,使用`texture2D(sampler2D, vUv)`函数可以采样纹理的颜色值.然后提前创建一个index*1的矩阵表示着色材质.在着色器代码中实现两个纹理的映射.
+## 把Canvas渲染效果作为纹理使用
+`CanvasTexture`可以做到这件事,在canvas中可以画各种图,还可以写文字.
+## Sprite实现广告牌
+Sprite是ThreeJS中用于实现广告牌效果的类. 广告牌是指始终面向摄像机的二维平面,常用于显示标签、图标或其他信息. 如果广告牌和物体重合了,可以考虑通过计算来移动广告牌.
+
+Sprite的另一个用法是把一些三维模型使用二维图像代替,从而提高性能.这些二维图像就是把模型的渲染结果作为纹理贴图应用到Sprite上. 当处理远方的作为背景的物体时,使用Sprite可以显著减少渲染开销.
+
+
+

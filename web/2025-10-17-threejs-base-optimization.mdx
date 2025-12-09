@@ -30,8 +30,8 @@ Mesh是由Geometry和Material组成的。Material里包括纹理Texture, 纹理�
 
 <ThreeCubeDemo ></ThreeCubeDemo >
 ### 材质
-- MeshBasicMaterial: 不受光照影响，颜色和纹理不变。
-- MeshPhongMaterial: 在每个像素计算光照，支持镜面高光的光泽度`shininess`。
+- MeshBasicMaterial: 不受光照影响，颜色和纹理不变。color需要有光源才能看到颜色,参与漫反射和镜面反射计算.
+- MeshPhongMaterial: 在每个像素计算光照，支持镜面高光的光泽度`shininess`。emissive是材质的自发光属性,会叠加到光照计算结果上,并且不会照亮其他物体.
 - MeshStandardMaterial: 物理基础渲染(PBR)材质，更真实地模拟光照和材质交互，支持金属度`metalness`和粗糙度`roughness`。
 - MeshPhysicalMaterial: 比`MeshStandardMaterial`多一个描述反光亮度的属性，清漆层`clearcoat`以及光泽层的粗糙程度`clearcoatRoughness`。
 
