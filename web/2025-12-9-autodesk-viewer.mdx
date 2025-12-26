@@ -8,6 +8,10 @@ import WebGLDemo from '@site/src/components/Autodesk/WebGLDemo';
 import WebGPUDemo from '@site/src/components/Autodesk/WebGPUDemo';
 import TypedArrayDemo from '@site/src/components/Autodesk/TypedArrayDemo';
 
+## 源码
+本文抽取了Autodesk Viewer SDK的源码,并通过让AI分析项目源码,学习了一些性能优化的方法.
+源码是闭源的,并使用Webpack打包,把源码用`eval`函数包起来,并把mapping文件进行base64编码.我把源码解析出来并按照目录组织好代码文件,只用于个人学习使用,未暴露给第三方组织或个人.
+
 ## 几何体合并
 BIM场景经常加载许多个微小零件,比如螺丝,管道等. 他们的几何体是一样的.而且层次结构也比较复杂.内存压力大,必须分页加载(Out of Core). 
 判断几何体合并可以在多个worker里并行做.Threejs没有提供这一功能,只是同步地单线程地计算矩阵变换和顶点合并.
