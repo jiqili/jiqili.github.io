@@ -1,0 +1,172 @@
+---
+title: Autodesk Viewer源码解析
+tags: [WebGL]
+---
+
+import GCDemo from '@site/src/components/Autodesk/GCDemo';
+import WebGLDemo from '@site/src/components/Autodesk/WebGLDemo';
+import WebGPUDemo from '@site/src/components/Autodesk/WebGPUDemo';
+import TypedArrayDemo from '@site/src/components/Autodesk/TypedArrayDemo';
+
+## 几何体合并
+BIM场景经常加载许多个微小零件,比如螺丝,管道等. 他们的几何体是一样的.而且层次结构也比较复杂.内存压力大,必须分页加载(Out of Core). 
+判断几何体合并可以在多个worker里并行做.Threejs没有提供这一功能,只是同步地单线程地计算矩阵变换和顶点合并.
+这时候几何体合并就显得尤为重要. 通过合并几何体,可以大幅度减少Draw Call数量,提升渲染性能.
+
+## 共享缓冲池
+这里还用到了共享缓冲池来减少垃圾回收的代价.传统方式是在for循环里不断创建新的ArrayBuffer,会导致频繁的垃圾回收. 而垃圾回收运行时会暂停JS的执行.
+共享缓冲池则是预先分配一大块内存,然后按需切割使用,用完后也只是重置指针到起始位置,而不是释放内存. 这样就避免了频繁的垃圾回收.
+
+<GCDemo />
+## BVH
+不使用BVH的话需要检查每个对象是否在视野内,在视野内才渲染.而BVH使用树状结构可以跳过子节点,检查复杂度是log n.
+有了BVH,我们可以把相邻的几何体分组合并到一个BVH节点,这样相邻的几何体可能同时可见或不可见.
+
+BVH节点包括节点的包围盒,左子节点,节点的fragment数等.如果节点的包围盒不在视锥内就不渲染该节点下的所有fragment. 如果是叶子节点就返回对应的`RenderBatch`,BVH渲染使用了队列维护.
+
+每个节点都包含一个渲染批次,通过视椎体裁剪和屏幕空间误差来决定哪些节点需要加载和渲染.
+
+## 智能渲染
+先按照BVH节点分组,保证空间邻近.然后实例化时按照材质和几何格式分组,保证可合并相似性.但是也不能把太多的几何体合成一个,这样单个渲染粒度太粗.
+
+此外还可以判断显存可用空间,显存用来渲染主体结构,如果显存不够就用CPU流式渲染那些次要物体.使用了启发式算法基于相同几何体的总size来给几何体打分.
+
+流式传输慢是因为CPU提交渲染命令后,GPU才开始工作.流式传输会让几何体使用共享的动态缓冲区来复用同一块小的GPU内存.
+而GPU渲染是异步的,CPU提交渲染命令时,GPU可能在渲染上一个命令.
+
+高复用的几何体值得放在GPU上,因为这样可以一次上传多帧使用.
+
+## OTG格式
+OTG就是Optimized Translation Graphics的缩写,可以做到边下载边处理,这样fragment可以一个个渲染出来了,这是一种流式读取的基于二进制的底层存储架构.
+
+OTG使用fetch API的`response.body.getReader()`获取一个ReadableStream,然后通过`reader.read()`按块读取数据. 每次读取返回一个包含`value`和`done`属性的对象,`value`是当前块的数据,`done`表示是否读取完毕.
+
+一个fragment的数据被分到了`fragment.fl`, `geometry_ptrs.hl`, `materials_ptrs.hl`. 其中`fragment.fl`不仅存了`transform`矩阵和`dbId`,还存了`geometry`和`material`的hash值.
+当一个fragment的hash list都就绪后才渲染.
+
+此外OTG还用到了`TypedArray`来高效处理二进制数据,比如`Float32Array`和`Uint16Array`. 这些类型化数组可以直接映射到底层的二进制数据,避免了手动解析字节流的复杂性.并且还是连续的,所以内存操作很快.
+另一方面,`TypedArray`比普通数组更紧凑,因为明确了元素类型.所以内存消耗更少.下面的示例展示了`TypedArray` "零拷贝" 解析数据的优势
+
+<TypedArrayDemo />
+
+在解析字节数据时,`intView = new Int32Array(buffer)` 和 `floatView = new Float32Array(buffer)` 共享同一块底层内存.
+使用`Int32Array`会把8字节数据看成两个整数,只是一个整数是合法的,另一个读的时候跳过即可. 使用`Float32Array`会把同样的8字节数据看成两个浮点数,也是只有一个是合法的浮点数.
+使用时,需要两个两个地读取正确的值.
+## 流式传输
+
+流式渲染就是把几何体数据存在内存,GPU渲染时先从内存拷贝到显存,然后渲染. 这样可以节省显存,但会增加CPU到GPU的传输开销. 主要还是处理数量多或者大的几何体导致显存不够的情况.
+
+Autodesk Viewer使用基于经验的简单的启发式算法来决定哪些几何体放在GPU上,哪些放在CPU上. 主要依据是几何体的大小和复用率. 大小是指几何体占用的内存大小,复用率是指几何体被多个实例使用的频率.
+
+## 基于Fragment的渐进式渲染
+Autodesk的基本渲染单元是Fragment,代表一个几何体实例. 每个独立可绘制对象都至少有一个fragment
+
+一个grometry可以被多个fragment引用(实例化),每个fragment都有自己的变换矩阵,材质,可见性等属性.grometry是用来存储顶点,法线,uv等数据的.但一个复杂的元素可能由多个fragments组成.
+
+生命周期:
+1. SvfLoader解析出fragments数据,包括`fragId2dbId`, `materials`, `transforms`, `mesh2frag`等数据
+2. `SvfLoader.processReceivedMesh(meshData)`函数对worker传来的mesh数据先转为`THREE.BufferGeometry`并加入共享的`GeometryList`中,然后对这个mesh的所有fragment逐个建立`THREE.Mesh`,逐个激活.
+因为worker是一直发送mash数据的,此时是增量添加fragment的,每累积到一定量就触发重绘,这样用户就看到了部分模型.
+3. fragment的激活本质是把fragment添加到场景遍历器用于渲染. 渲染循环中遍历fragment.渲染迭代器分为线性迭代器和BVH迭代器两种,线性迭代器直接遍历所有fragment,经常用于2D绘制,小场景和增量添加fragment的场景
+4. 模型加载完成后,开始构建BVH,然后渲染时使用BVH遍历.BVH迭代器先遍历BVH节点,剔除不可见节点后再遍历节点下的fragment
+```
+用户点击加载模型
+    ↓
+[t=0ms] 创建 RenderModel
+    ├─ FragmentList（空）
+    ├─ GeometryList（空）
+    └─ LinearIterator ← 初始遍历器
+    
+[t=100ms] 第一批 mesh 数据到达
+    ├─ processReceivedMesh()
+    ├─ activateFragment() × N
+    └─ 触发重绘 → 用户看到 10% 模型 ✨
+    
+[t=500ms] 第二批 mesh 数据到达
+    ├─ activateFragment() × N
+    └─ 触发重绘 → 用户看到 30% 模型 ✨
+    
+[t=1000ms] 第三批...
+    └─ 持续显示进度... ✨
+    
+[t=5000ms] 所有数据加载完成
+    ├─ onGeomLoadDone()
+    ├─ makeBVH() 或使用预构建 BVH
+    ├─ model.setBVH()
+    │   └─ 创建 ModelIteratorBVH
+    └─ SceneTraversal.#chooseTraversalController()
+        └─ 切换到 BVH 遍历！
+        
+[t=5001ms onwards] 后续渲染
+    └─ 使用 BVH 遍历 → 大幅提升性能 🚀
+```
+作用:
+1. Fragment在场景遍历时,会批量处理fragments,每个fragment对应屏幕上的一个可绘制对象. 
+2. 通过fragId定位到具体的对象进行拾取和选择操作,还关联到dbid进行属性查询.
+3. 包围盒计算,视锥剔除等优化操作都是基于fragment进行的.
+
+## Out of Core Tile 内存管理
+Out of Core Tile是Autodesk viewer的核心内存管理系统,用于处理GPU内存不够用的时候. 主要策略是分层管理, 当前视野内和附近的tile(也就是BVH节点),优先加载到GPU并且会渲染到叶子节点.远处的节点排序后只渲染较大的fragments.
+
+系统定义了数据的5个阶段:
+1. 初始阶段,节点刚创建
+2. fragment list已加载
+3. geometry已加载到内存
+4. 合并计算完成
+5. 数据已上传到GPU并优化(常驻GPU内存)
+根据BVH的节点离相机的距离修改节点自身的阶段. 前几个阶段都可能会渲染,只不过是流式渲染,但作为渐进式加载系统,这样可以把模型加载分散到多个帧中.
+
+如果是用WebGPU,就没有第四个阶段.合并计算只在WebGL模式中有. 原因是WebGPU不需要多个mesh合并成一个,这些mesh可以保持独立批量渲染.Draw call限制对WebGPU来说不是问题.
+
+## WebGPU
+WebGL每帧画面可能会drawcall多次,每次drawcall都会有CPU和GPU之间的通信. 就算使用合并几何体,只draw一次,但仍然比WebGPU慢.
+
+原因在于每次对象移动,都要重新计算合并,还要重新上传整个缓冲区,CPU计算和上传带宽成为瓶颈.
+
+但WebGPU没有合并几何体这回事,因为WebGPU可以并行处理drawcalls,并且对象都是独立的,一个对象移动并不用重新计算其他的对象,上传时也只需要上传这一个对象即可.
+
+并且WebGPU可以高效地计算变换,也不用CPU算,算的也比CPU快.
+
+并且合并几何体还会带来剔除困难的问题,因为合并后无法单独剔除某个对象.
+
+并且从整个流程来看,webgl即使只绘制一次,也需要JS -> 浏览器 -> OpenGL 驱动 -> GPU, 这个过程有很多开销.而WebGPU是JS->GPU通信
+
+下面这两个示例都是独立渲染大量立方体,可以看到webgpu有显著提升(注意测试一个的时候关闭另一个的渲染,否则会互相影响性能)
+
+<WebGLDemo />
+<WebGPUDemo />
+### ThreeJS的WebGPU渲染器
+性能还不如webgl版本的,我猜一方面是webgl有很多优化了,另一方面是webgpu的几乎没优化(甚至还不如原生写法)
+### 原生WebGPU的工作流
+- 初始化
+```
+1. 通过navigator.gpu拿到设备device
+2. 拿到canvas的webgpu上下文
+3. 绑定资源布局. WebGPU把数据分为组,可以理解为资源文件夹,每个组里有多个资源,比如uniform buffer
+4. 创建渲染管线,传入资源布局,着色器模块,包括顶点结构和片元颜色结构等的渲染描述符
+5. 创建缓冲区并写入渲染队列,把缓冲和布局绑定
+```
+- 渲染循环
+```
+1. 更新数据并写入缓冲区
+2. 获取当前canvas的纹理,准备把像素数据写到这个纹理上
+3. 创建命令编码,并定义从CPU传输数据到GPU的描述符,包括渲染目标,清除颜色等
+4. 为传输绑定渲染管线,资源文件夹,顶点缓冲区,顶点数据.
+5. 调用draw方法记录绘制命令
+6. 结束渲染传输,提交命令到GPU队列
+```
+### WebGPU的队列
+`device.queue`是CPU和GPU之间唯一的通道,传输几何数据和命令数据都从这里过,并且队列还保证了同步,你肯定希望在执行命令之前数据都准备好了.
+
+## UBO
+Uniform Buffer Object是指把多个uniform变量打包到一个缓冲区对象中,然后传递给GPU. 这样可以减少每个draw call传递的uniform数据量. WebGL和WebGPU都可以用这个技术.
+
+Atuodesk Viewer中,WebGL需要启动Out-of-Core Tile才能激活UBO,而且Autodesk Viewer为不同格式的文件提供了不同的优化策略,对于设置面板里的参数都是存在localStorage里的,
+而且还存了一个key名用来区分default,还是ACE等. ACE应该对应rvt这种格式
+## 实例化
+几何体合并是将多个不同的几何体拷贝到一个大缓冲区,每个几何体的变换矩阵已经应用到顶点上,然后在一次draw call中渲染,合并后所有几何体是一个整体.
+
+实例化是指几何数据只有一份,多个实例都是一样的几何体,变换矩阵在GPU的顶点着色器中计算,然后在一次draw call中渲染所有实例,每个实例都是独立的.
+
+## 后处理
+关于一些渲染处理,例如增强阴影效果的环境光屏蔽,快速抗锯齿和去除图像噪音让画面更柔和自然的高斯模糊,Autodesk Viewer也做了一些优化处理,不过这里就不展开讲了.
