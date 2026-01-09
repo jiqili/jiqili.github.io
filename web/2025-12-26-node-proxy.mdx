@@ -1,0 +1,12 @@
+---
+title: Node网络请求使用代理
+tags: [NodeJS]
+---
+
+## 结论
+环境变量`HTTP_PROXY`和`HTTPS_PROXY`可以设置Node的全局代理,但是对fetch无效,对axios有效. 
+
+使用http模块可以手动制定proxy
+
+## 解决办法
+如果是`npm install`遇到这种问题,可以使用`npm ci --ignore-scripts --force`忽略脚本执行和依赖版本冲突
