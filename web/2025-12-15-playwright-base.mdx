@@ -1,0 +1,26 @@
+---
+title: Playwright Base
+tages: [e2e-testing, playwright, testing]
+---
+
+## 基本知识
+Playwright把测试样例组织在一个个的测试套件（test suite）中，每个测试套件包含多个测试用例（test case）。测试套件通过`describe`函数定义，测试用例通过`test`函数定义。
+每个测试套件有例如`test.beforeEach`和`test.afterEach`等生命周期钩子函数,这样每个测试样例执行时都会运行这些函数.比如可以在`beforeEach`中做一些跳转页面等初始化工作,在`afterEach`中做一些清理工作.
+
+`test(title, async ({ page }) => { ... })`函数接受两个参数：测试用例的标题和一个异步函数。异步函数的参数是一个包含浏览器页面对象（page）的对象，可以通过这个页面对象与网页进行交互。
+
+page对象可以导航,定位元素并操作该元素,等待一个元素的操作完成,执行脚本(比如清理localStorage, 拿数据等), 拦截请求,读取存储,`page.pause()`用来调试,截图等.
+
+### 一般流程
+由于默认是`about:blank`页面,所以第一步通常是导航到目标页面,使用`await page.goto('http://example.com')`.
+
+这时候导航这个动作应该会有网络请求产生,使用`page.waitForLoadState('networkidle')`等待网络空闲状态,确保所有请求完成.但其实对于SPA这个方法可能不稳定,因为可能有长轮询导致网络永不空闲或者请求很快结束导致渲染还未完成.
+所以更推荐的做法是等待某个关键元素加载完成,比如`await page.waitForSelector('#main-content')`或者使用`await expect(element).toBeVisible()`等待目标元素出现.
+对于按钮,可以用`page.getByRole('button', { name: 'Submit' })`来定位按钮,`getByRole`是和无障碍相关的定位方法,如果button没有设置`aria-label`,那么name就是按钮的文本内容.
+
+如果要执行脚本,比如获取localStorage,可以使用`page.evaluate(() => { return localStorage.getItem('key'); })`. 然后使用`expect`断言获取的值, 比如`expect(value).toBe('expectedValue')`.
+
+对于canvas,想要检测canvas是否渲染了,可以检测像素,使用`canvas.evalute((canvas) => bool)`函数检查cavnas像素
+
+### 配置
+可以设置代理,`ignoreHTTPSErrors`等配置,这些配置可以在`playwright.config.ts`中进行设置. 在这里也可以设置测试运行时的启动命令,比如`npm run dev`,就可以知道测试时用的哪个环境变量(环境变量可能设置了和启动命令有关)
