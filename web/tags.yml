@@ -34,3 +34,19 @@ WebGL:
     label: WebGL
     permalink: webgl
     description: WebGL
+E2E Testing:
+    label: E2E Testing
+    permalink: e2e-testing
+    description: End-to-end testing
+Playwright:
+    label: Playwright
+    permalink: playwright
+    description: Playwright
+Testing:
+    label: Testing
+    permalink: testing
+    description: Testing
+NodeJS:
+    label: NodeJS
+    permalink: node
+    description: Node.js
