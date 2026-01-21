@@ -6,3 +6,19 @@ visual:
     label: 视觉
     permalink: visual
     description: 视觉模型的应用
+LLM: 
+    label: LLM
+    permalink: llm
+    description: Large Language Models
+C++:
+    label: C++
+    permalink: cpp
+    description: C++
+多线程:
+    label: 多线程
+    permalink: multithreading
+    description: 多线程编程
+Compiler:
+    label: Compiler
+    permalink: compiler
+    description: 编译器
